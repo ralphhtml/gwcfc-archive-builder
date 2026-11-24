@@ -8,7 +8,7 @@
 visible bands, drawn and uploaded with a mark beside each so the server never clears them out.
 
 --serve: the server keeps a list of archive pictures somebody is waiting for (GET /archive/queue). This reads it
-every two seconds, draws each on four processors and uploads it at once; the server sends it to the visitor the
+every second, draws each on four processors and uploads it at once; the server sends it to the visitor the
 moment it lands, and draws it itself only if this has not answered within a few seconds.
 
 The drawing code is pipeline.bin, encrypted. The server's address and the signing key come from the environment
@@ -32,6 +32,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 EVENT_BANDS = (13, 9, 2)        # clean infrared, water vapour, visible
 EVENT_FRAMES = int(os.environ.get("ARC_EVENT_FRAMES", "24"))
 KEEP_MARK = ".keep.json"
+KINDS = ("sat", "mrms", "hrrr", "view", "prod", "cth", "recon", "render", "ahi", "ahiview", "eum")
 os.environ.setdefault("GWCFC_NO_UPLOADS", "1")
 
 
@@ -134,7 +135,7 @@ def new_under(root, subs):
     with _sent_lock:
         for sub in subs:
             for dp, dn, fn in os.walk(os.path.join(root, sub)):
-                dn[:] = [d for d in dn if d not in ("raw", "asks") and not d.startswith("_")]
+                dn[:] = [d for d in dn if d not in ("raw", "asks") and (not d.startswith("_") or d == "_closeups")]
                 for n in fn:
                     p = os.path.join(dp, n)
                     if n.endswith((".png", ".json", ".webp")) and not n.startswith(".") and _sent.get(p) != os.path.getsize(p):
@@ -168,6 +169,33 @@ def draw_ask(base, key_path, spec):
         CTH.build_frame(spec["bucket"], spec["key"], spec["sector"], tuple(spec["bbox"]),
                         os.path.join(WX, "satellite", "cth"))
         root, subs = os.path.join(WX, "satellite"), ["cth"]
+    elif kind == "render":
+        # The older records and a boxed GOES-R scan, by the same choice the server's own door makes.
+        import sat_archive as SA
+        if spec.get("view") and spec.get("rec") == "b1":
+            SA.render_view_b1(spec["key"], spec["box"], SA.CACHE_DIR, edge=spec.get("edge"))
+        elif spec.get("view") and spec.get("rec") == "gsg":
+            SA.render_view_gsg(spec["key"], int(spec["band"]), spec["box"], SA.CACHE_DIR, edge=spec.get("edge"))
+        else:
+            SA.render(spec["bucket"], spec["key"], int(spec["band"]), spec["sector"], post=spec.get("post") or "east",
+                      box=spec.get("box"), nearest=bool(spec.get("nearest")))
+        root, subs = os.path.join(WX, "satellite"), ["archive"]
+    elif kind in ("ahi", "ahiview"):
+        import sat_archive as SA
+        import sat_ahi as AHI
+        key, prod, box = spec["key"], spec.get("prod"), spec.get("box")
+        if kind == "ahi":
+            (AHI.render_prod(key, prod, SA.CACHE_DIR, box=box) if prod
+             else AHI.render(key, int(spec["band"]), SA.CACHE_DIR, box=box))
+        else:
+            (AHI.render_view_fldk_prod(key, prod, box, SA.CACHE_DIR, edge=spec.get("edge")) if prod
+             else AHI.render_view_fldk(key, int(spec["band"]), box, SA.CACHE_DIR, edge=spec.get("edge"),
+                                       nearest=bool(spec.get("nearest"))))
+        root, subs = os.path.join(WX, "satellite"), ["archive", "products"]
+    elif kind == "eum":
+        import eumetsat_pipeline as EUM
+        EUM.closeup(spec["sat"], spec["prod"], spec["t"], tuple(spec["box"]), edge=spec.get("edge"))
+        root, subs = os.path.join(WX, "satellite"), ["eumetsat/_closeups"]
     elif kind == "recon":
         import recon_pipeline as RP
         RP.build_day(spec["day"], out_dir=os.path.join(WX, "recon"))
@@ -306,7 +334,7 @@ def run_serve(base, key_path, minutes):
     def work(spec, k):
         t0 = time.time()
         try:
-            if spec.get("kind") in ("view", "prod", "cth", "recon") and re.fullmatch(r"[0-9a-f]{24}", str(spec.get("ask", ""))) \
+            if spec.get("kind") in ("view", "prod", "cth", "recon", "render", "ahi", "ahiview", "eum") and re.fullmatch(r"[0-9a-f]{24}", str(spec.get("ask", ""))) \
                     and spec.get("tree") in ("satellite", "recon"):
                 n = draw_ask(base, key_path, spec)
                 log(f"drew and sent a {spec['kind']}: {n} files in {time.time() - t0:.1f}s")
@@ -341,17 +369,20 @@ def run_serve(base, key_path, minutes):
                 # And that this builder knows close-ups, composites, cloud heights and recon days.
                 post(base, key_path, time.strftime("%Y%m%d_%H", time.gmtime()), "commit", 0,
                      json.dumps({"job": "archive-v2"}).encode())
+                # And the older satellite records, the Himawari archive and Meteosat close-ups.
+                post(base, key_path, time.strftime("%Y%m%d_%H", time.gmtime()), "commit", 0,
+                     json.dumps({"job": "archive-v3"}).encode())
                 last_in = t0
             jobs = requests.get(base + "/archive/queue", timeout=10,
                                 headers={"User-Agent": "gwcfc-archive-builder"}).json().get("jobs") or []
             for spec in jobs:
                 k = json.dumps(spec, sort_keys=True)
-                if spec.get("kind") in ("sat", "mrms", "hrrr", "view", "prod", "cth", "recon") and k not in busy and len(busy) < 12:
+                if spec.get("kind") in KINDS and k not in busy and len(busy) < 12:
                     busy.add(k)
                     pool.submit(work, spec, k)
         except Exception as e:                          # noqa: BLE001
             log(f"tick failed: {e.__class__.__name__}")
-        time.sleep(max(0.2, 2.0 - (time.time() - t0)))
+        time.sleep(max(0.2, 1.0 - (time.time() - t0)))      # the list is read every second
     pool.shutdown(wait=True)
     return 0
 
