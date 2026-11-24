@@ -20,6 +20,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
@@ -120,6 +121,66 @@ def send(base, key_path, files, job="archive", region="satellite"):
     if batch:
         flush()
     post(base, key_path, run, "commit", part, json.dumps({"job": job}).encode(), region=region)
+
+
+_sent = {}
+_sent_lock = __import__("threading").Lock()
+WX = os.path.expanduser("~/wxdata")
+
+
+def new_under(root, subs):
+    """Files under these folders of root that have not been sent yet: [(path, path under root)]."""
+    out = []
+    with _sent_lock:
+        for sub in subs:
+            for dp, dn, fn in os.walk(os.path.join(root, sub)):
+                dn[:] = [d for d in dn if d not in ("raw", "asks") and not d.startswith("_")]
+                for n in fn:
+                    p = os.path.join(dp, n)
+                    if n.endswith((".png", ".json", ".webp")) and not n.startswith(".") and _sent.get(p) != os.path.getsize(p):
+                        out.append((p, os.path.relpath(p, root).replace(os.sep, "/")))
+        for p, _r in out:
+            _sent[p] = os.path.getsize(p)
+    return out
+
+
+def draw_ask(base, key_path, spec):
+    """A close-up, a colour composite, a zone's cloud-top heights or a day of recon: drawn where the server would
+    have written it, uploaded, and then the small marker the server is waiting for."""
+    kind, tree = spec["kind"], spec.get("tree") or "satellite"
+    if kind == "view":
+        import sat_archive as SA
+        SA.render_view(spec["bucket"], spec["key"], int(spec["band"]), spec["sector"], spec["box"],
+                       edge=spec.get("edge"), nearest=bool(spec.get("nearest")))
+        root, subs = os.path.join(WX, "satellite"), ["archive"]
+    elif kind == "prod":
+        import sat_products as SP
+        png, _b = SP.render(spec["bucket"], spec["key"], spec["prod"], spec["sector"],
+                            os.path.join(WX, "satellite", "products"), box=spec.get("box"),
+                            nearest_pixels=bool(spec.get("nearest")))
+        try:
+            SP.to_webp(png)
+        except Exception:                               # noqa: BLE001
+            pass
+        root, subs = os.path.join(WX, "satellite"), ["products"]
+    elif kind == "cth":
+        import sat_cth as CTH
+        CTH.build_frame(spec["bucket"], spec["key"], spec["sector"], tuple(spec["bbox"]),
+                        os.path.join(WX, "satellite", "cth"))
+        root, subs = os.path.join(WX, "satellite"), ["cth"]
+    elif kind == "recon":
+        import recon_pipeline as RP
+        RP.build_day(spec["day"], out_dir=os.path.join(WX, "recon"))
+        root, subs = os.path.join(WX, "recon"), ["day"]
+    else:
+        return 0
+    files = new_under(root, subs)
+    mark = os.path.join(root, "asks", str(spec["ask"]) + ".json")
+    os.makedirs(os.path.dirname(mark), exist_ok=True)
+    with open(mark, "w") as fh:
+        json.dump({"at": time.time(), "kind": kind}, fh)
+    send(base, key_path, files + [(mark, "asks/" + os.path.basename(mark))], region=tree)
+    return len(files)
 
 
 _radar_sent = {}
@@ -245,6 +306,11 @@ def run_serve(base, key_path, minutes):
     def work(spec, k):
         t0 = time.time()
         try:
+            if spec.get("kind") in ("view", "prod", "cth", "recon") and re.fullmatch(r"[0-9a-f]{24}", str(spec.get("ask", ""))) \
+                    and spec.get("tree") in ("satellite", "recon"):
+                n = draw_ask(base, key_path, spec)
+                log(f"drew and sent a {spec['kind']}: {n} files in {time.time() - t0:.1f}s")
+                return
             if spec.get("kind") in ("mrms", "hrrr"):
                 n = draw_radar(base, key_path, spec)
                 log(f"drew and sent {spec['kind']} {spec['what']}: {n} files in {time.time() - t0:.1f}s")
@@ -272,12 +338,15 @@ def run_serve(base, key_path, minutes):
                 # satellite pictures must not be waited on for a radar mosaic.
                 post(base, key_path, time.strftime("%Y%m%d_%H", time.gmtime()), "commit", 0,
                      json.dumps({"job": "archive"}).encode(), region="radar-archive")
+                # And that this builder knows close-ups, composites, cloud heights and recon days.
+                post(base, key_path, time.strftime("%Y%m%d_%H", time.gmtime()), "commit", 0,
+                     json.dumps({"job": "archive-v2"}).encode())
                 last_in = t0
             jobs = requests.get(base + "/archive/queue", timeout=10,
                                 headers={"User-Agent": "gwcfc-archive-builder"}).json().get("jobs") or []
             for spec in jobs:
                 k = json.dumps(spec, sort_keys=True)
-                if spec.get("kind") in ("sat", "mrms", "hrrr") and k not in busy and len(busy) < 12:
+                if spec.get("kind") in ("sat", "mrms", "hrrr", "view", "prod", "cth", "recon") and k not in busy and len(busy) < 12:
                     busy.add(k)
                     pool.submit(work, spec, k)
         except Exception as e:                          # noqa: BLE001
