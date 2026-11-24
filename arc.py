@@ -268,6 +268,10 @@ def run_serve(base, key_path, minutes):
             if t0 - last_in > 60:
                 post(base, key_path, time.strftime("%Y%m%d_%H", time.gmtime()), "commit", 0,
                      json.dumps({"job": "archive"}).encode())
+                # And for the radar archive, which the server asks about on its own: a builder that could only draw
+                # satellite pictures must not be waited on for a radar mosaic.
+                post(base, key_path, time.strftime("%Y%m%d_%H", time.gmtime()), "commit", 0,
+                     json.dumps({"job": "archive"}).encode(), region="radar-archive")
                 last_in = t0
             jobs = requests.get(base + "/archive/queue", timeout=10,
                                 headers={"User-Agent": "gwcfc-archive-builder"}).json().get("jobs") or []
