@@ -1,0 +1,30 @@
+name: Hurricane Hunters radar archive
+
+# Draws the whole TC-RADAR archive once and uploads it. By hand, or by a push to trigger/tcradar.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["trigger/tcradar"]
+
+permissions:
+  contents: read
+
+jobs:
+  tcradar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    concurrency:
+      group: tcradar
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - env:
+          GWCFC_BASE: ${{ secrets.GWCFC_BASE }}
+          GWCFC_UPLOAD_KEY: ${{ secrets.GWCFC_UPLOAD_KEY }}
+        run: python3 arc.py --tcradar

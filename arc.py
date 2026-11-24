@@ -356,10 +356,58 @@ def run_serve(base, key_path, minutes):
     return 0
 
 
+def run_tcradar(base, key_path, dry):
+    """The Hurricane Hunters' airborne radar archive, drawn whole: the storm list, then every swath (the source file
+    is mirrored once, about 1.5 GB), uploaded as it goes so a job cut short keeps what it sent."""
+    code = sys.path[0]
+    env = dict(os.environ, PYTHONPATH=code)
+    root = os.path.join(WX, "tcradar")
+
+    def push():
+        files = new_under(root, ["png"]) + [(os.path.join(root, n), n) for n in ("index.json", "places.json")
+                                             if os.path.exists(os.path.join(root, n))]
+        if files and not dry:
+            # In parts of 20 MB: these are many small pictures, and there is no visitor waiting on any one of them.
+            batch, size = [], 0
+            for item in files:
+                sz = os.path.getsize(item[0])
+                if batch and size + sz > 20e6:
+                    send_big(base, key_path, batch)
+                    batch, size = [], 0
+                batch.append(item)
+                size += sz
+            if batch:
+                send_big(base, key_path, batch)
+        log(f"tcradar: {len(files)} files {'(not sent)' if dry else 'sent'}")
+    subprocess.run([sys.executable, os.path.join(code, "tcradar_pipeline.py"), "--index"], env=env, cwd=code, timeout=1800)
+    end = time.time() + 5 * 3600
+    while time.time() < end:
+        r = subprocess.run([sys.executable, os.path.join(code, "tcradar_pipeline.py"), "--bake", "--resume",
+                            "--budget", "1200"], env=env, cwd=code, capture_output=True, text=True, timeout=3600)
+        tail = (r.stdout or "").strip().splitlines()[-1:]
+        log("tcradar: " + (tail[0][:160] if tail else f"exit {r.returncode}"))
+        before = len(_sent)
+        push()
+        if len(_sent) == before:
+            break                                       # a whole turn drew nothing new: it is finished
+    return 0
+
+
+def send_big(base, key_path, files):
+    run = time.strftime("%Y%m%d_%H", time.gmtime())
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w") as tf:
+        for path, rel in files:
+            tf.add(path, arcname=rel, recursive=False)
+    post(base, key_path, run, "part", 0, buf.getvalue(), region="tcradar")
+    post(base, key_path, run, "commit", 1, json.dumps({"job": "tcradar"}).encode(), region="tcradar")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--events", action="store_true")
     ap.add_argument("--serve", action="store_true")
+    ap.add_argument("--tcradar", action="store_true")
     ap.add_argument("--shard", type=int, default=0)
     ap.add_argument("--of", type=int, default=1)
     ap.add_argument("--loop", type=int, default=320)
@@ -381,6 +429,8 @@ def main(argv=None):
         return run_events(base, key_path, a.shard, a.of, a.dry)
     if a.serve:
         return run_serve(base, key_path, a.loop)
+    if a.tcradar:
+        return run_tcradar(base, key_path, a.dry)
     return 2
 
 
