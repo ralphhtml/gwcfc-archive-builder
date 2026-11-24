@@ -1,0 +1,35 @@
+name: Named weather events
+
+# Builds the Time Machine's named events ahead of time (events.json). By hand, or by a push to trigger/events.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["trigger/events", "events.json"]
+
+permissions:
+  contents: read
+
+jobs:
+  events:
+    name: events ${{ matrix.shard }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -q -r requirements.txt
+      - name: Draw and upload
+        env:
+          GWCFC_BASE: ${{ secrets.GWCFC_BASE }}
+          GWCFC_UPLOAD_KEY: ${{ secrets.GWCFC_UPLOAD_KEY }}
+          SHARD: ${{ matrix.shard }}
+        run: python3 arc.py --events --shard "$SHARD" --of 6

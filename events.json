@@ -1,0 +1,296 @@
+[
+{
+"name": "Hurricane Andrew",
+"kind": "hurricane",
+"t": "1992-08-24T08:50Z",
+"lat": 25.5,
+"lon": -80.35
+},
+{
+"name": "Hurricane Katrina",
+"kind": "hurricane",
+"t": "2005-08-29T11:10Z",
+"lat": 29.3,
+"lon": -89.6
+},
+{
+"name": "Hurricane Sandy",
+"kind": "hurricane",
+"t": "2012-10-29T23:30Z",
+"lat": 39.4,
+"lon": -74.4
+},
+{
+"name": "Hurricane Harvey",
+"kind": "hurricane",
+"t": "2017-08-26T03:00Z",
+"lat": 28.0,
+"lon": -97.0
+},
+{
+"name": "Hurricane Irma",
+"kind": "hurricane",
+"t": "2017-09-10T13:10Z",
+"lat": 24.7,
+"lon": -81.5
+},
+{
+"name": "Hurricane Maria",
+"kind": "hurricane",
+"t": "2017-09-20T10:15Z",
+"lat": 18.0,
+"lon": -65.9
+},
+{
+"name": "Hurricane Florence",
+"kind": "hurricane",
+"t": "2018-09-14T11:15Z",
+"lat": 34.2,
+"lon": -77.8
+},
+{
+"name": "Hurricane Michael",
+"kind": "hurricane",
+"t": "2018-10-10T17:30Z",
+"lat": 29.9,
+"lon": -85.4
+},
+{
+"name": "Hurricane Dorian",
+"kind": "hurricane",
+"t": "2019-09-01T16:40Z",
+"lat": 26.5,
+"lon": -77.0
+},
+{
+"name": "Hurricane Laura",
+"kind": "hurricane",
+"t": "2020-08-27T06:00Z",
+"lat": 29.8,
+"lon": -93.3
+},
+{
+"name": "Hurricane Ida",
+"kind": "hurricane",
+"t": "2021-08-29T16:55Z",
+"lat": 29.1,
+"lon": -90.2
+},
+{
+"name": "Hurricane Ian",
+"kind": "hurricane",
+"t": "2022-09-28T19:05Z",
+"lat": 26.7,
+"lon": -82.2
+},
+{
+"name": "Hurricane Idalia",
+"kind": "hurricane",
+"t": "2023-08-30T11:45Z",
+"lat": 29.9,
+"lon": -83.6
+},
+{
+"name": "Hurricane Otis",
+"kind": "hurricane",
+"t": "2023-10-25T06:25Z",
+"lat": 16.8,
+"lon": -99.9
+},
+{
+"name": "Hurricane Beryl",
+"kind": "hurricane",
+"t": "2024-07-08T09:00Z",
+"lat": 28.6,
+"lon": -96.0
+},
+{
+"name": "Hurricane Helene",
+"kind": "hurricane",
+"t": "2024-09-27T03:10Z",
+"lat": 29.9,
+"lon": -83.8
+},
+{
+"name": "Hurricane Milton",
+"kind": "hurricane",
+"t": "2024-10-10T00:30Z",
+"lat": 27.2,
+"lon": -82.5
+},
+{
+"name": "Bridge Creek-Moore F5",
+"kind": "tornado",
+"t": "1999-05-04T00:30Z",
+"lat": 35.33,
+"lon": -97.49
+},
+{
+"name": "Tuscaloosa-Birmingham EF4",
+"kind": "tornado",
+"t": "2011-04-27T22:10Z",
+"lat": 33.2,
+"lon": -87.5
+},
+{
+"name": "Joplin EF5",
+"kind": "tornado",
+"t": "2011-05-22T22:40Z",
+"lat": 37.08,
+"lon": -94.51
+},
+{
+"name": "Hattiesburg EF4",
+"kind": "tornado",
+"t": "2013-02-10T23:05Z",
+"lat": 31.33,
+"lon": -89.29
+},
+{
+"name": "Moore EF5",
+"kind": "tornado",
+"t": "2013-05-20T20:00Z",
+"lat": 35.33,
+"lon": -97.49
+},
+{
+"name": "El Reno EF3",
+"kind": "tornado",
+"t": "2013-05-31T23:05Z",
+"lat": 35.5,
+"lon": -98.0
+},
+{
+"name": "Vilonia EF4",
+"kind": "tornado",
+"t": "2014-04-28T00:20Z",
+"lat": 35.08,
+"lon": -92.2
+},
+{
+"name": "Nashville EF3",
+"kind": "tornado",
+"t": "2020-03-03T06:40Z",
+"lat": 36.17,
+"lon": -86.78
+},
+{
+"name": "Mayfield EF4",
+"kind": "tornado",
+"t": "2021-12-11T03:30Z",
+"lat": 36.74,
+"lon": -88.64
+},
+{
+"name": "Rolling Fork EF4",
+"kind": "tornado",
+"t": "2023-03-25T01:10Z",
+"lat": 32.9,
+"lon": -90.88
+},
+{
+"name": "Little Rock EF3",
+"kind": "tornado",
+"t": "2023-03-31T19:30Z",
+"lat": 34.75,
+"lon": -92.3
+},
+{
+"name": "Elkhorn EF4",
+"kind": "tornado",
+"t": "2024-04-26T20:40Z",
+"lat": 41.3,
+"lon": -96.2
+},
+{
+"name": "Greenfield EF4",
+"kind": "tornado",
+"t": "2024-05-21T20:30Z",
+"lat": 41.3,
+"lon": -94.46
+},
+{
+"name": "Super Tuesday outbreak",
+"kind": "outbreak",
+"t": "2008-02-06T00:00Z",
+"lat": 35.5,
+"lon": -88.5
+},
+{
+"name": "2011 Super Outbreak",
+"kind": "outbreak",
+"t": "2011-04-27T21:00Z",
+"lat": 33.5,
+"lon": -87.5
+},
+{
+"name": "May 2013 Oklahoma outbreak",
+"kind": "outbreak",
+"t": "2013-05-20T20:00Z",
+"lat": 35.4,
+"lon": -97.4
+},
+{
+"name": "December 2021 outbreak",
+"kind": "outbreak",
+"t": "2021-12-11T03:00Z",
+"lat": 36.5,
+"lon": -89.0
+},
+{
+"name": "March 31 2023 outbreak",
+"kind": "outbreak",
+"t": "2023-03-31T21:00Z",
+"lat": 37.0,
+"lon": -90.5
+},
+{
+"name": "April 26 2024 outbreak",
+"kind": "outbreak",
+"t": "2024-04-26T21:00Z",
+"lat": 41.2,
+"lon": -96.0
+},
+{
+"name": "June 2012 derecho",
+"kind": "derecho",
+"t": "2012-06-30T01:00Z",
+"lat": 39.0,
+"lon": -78.0
+},
+{
+"name": "Iowa derecho",
+"kind": "derecho",
+"t": "2020-08-10T17:00Z",
+"lat": 41.98,
+"lon": -91.67
+},
+{
+"name": "January 2016 blizzard",
+"kind": "winter",
+"t": "2016-01-23T12:00Z",
+"lat": 39.0,
+"lon": -77.0
+},
+{
+"name": "February 2021 Texas freeze",
+"kind": "winter",
+"t": "2021-02-15T06:00Z",
+"lat": 32.8,
+"lon": -97.0
+},
+{
+"name": "Buffalo blizzard",
+"kind": "winter",
+"t": "2022-12-24T12:00Z",
+"lat": 42.9,
+"lon": -78.9
+},
+{
+"name": "August 2016 Louisiana flood",
+"kind": "flood",
+"t": "2016-08-13T12:00Z",
+"lat": 30.5,
+"lon": -91.0
+}
+]
