@@ -73,14 +73,14 @@ def sign(msg, key_path):
         os.unlink(mp)
 
 
-def post(base, key_path, run, kind, part, body, tries=5):
+def post(base, key_path, run, kind, part, body, tries=5, region="satellite"):
     import requests
     last = ""
     for n in range(tries):
         sha = hashlib.sha256(body).hexdigest()
         ts = str(int(time.time()))
-        msg = "\n".join(["gwcfc-upload-v1", "tree", "satellite", run, kind, str(part), sha, ts]).encode()
-        headers = {"X-GWCFC-Model": "tree", "X-GWCFC-Region": "satellite", "X-GWCFC-Run": run, "X-GWCFC-Kind": kind,
+        msg = "\n".join(["gwcfc-upload-v1", "tree", region, run, kind, str(part), sha, ts]).encode()
+        headers = {"X-GWCFC-Model": "tree", "X-GWCFC-Region": region, "X-GWCFC-Run": run, "X-GWCFC-Kind": kind,
                    "X-GWCFC-Part": str(part), "X-GWCFC-Sha256": sha, "X-GWCFC-Ts": ts,
                    "X-GWCFC-Sig": base64.b64encode(sign(msg, key_path)).decode(),
                    "Content-Type": "application/octet-stream", "User-Agent": "gwcfc-archive-builder"}
@@ -97,15 +97,61 @@ def post(base, key_path, run, kind, part, body, tries=5):
     raise RuntimeError(f"upload of {kind} {part} failed: {last}")
 
 
-def send(base, key_path, files, job="archive"):
-    """One part with these (path on disk, path under satellite/) files, then the commit."""
+def send(base, key_path, files, job="archive", region="satellite"):
+    """These (path on disk, path under the folder) files in parts of a few megabytes, then the commit."""
     run = time.strftime("%Y%m%d_%H", time.gmtime())
-    buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w") as tf:
-        for path, rel in files:
-            tf.add(path, arcname=rel, recursive=False)
-    post(base, key_path, run, "part", 0, buf.getvalue())
-    post(base, key_path, run, "commit", 1, json.dumps({"job": job}).encode())
+    batch, size, part = [], 0, 0
+
+    def flush():
+        nonlocal batch, size, part
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w") as tf:
+            for path, rel in batch:
+                tf.add(path, arcname=rel, recursive=False)
+        post(base, key_path, run, "part", part, buf.getvalue(), region=region)
+        part += 1
+        batch, size = [], 0
+    for item in files:
+        sz = os.path.getsize(item[0])
+        if batch and size + sz > 2.5e6:                 # small parts are taken at once by the server, not queued
+            flush()
+        batch.append(item)
+        size += sz
+    if batch:
+        flush()
+    post(base, key_path, run, "commit", part, json.dumps({"job": job}).encode(), region=region)
+
+
+_radar_sent = {}
+_radar_lock = __import__("threading").Lock()
+
+
+def draw_radar(base, key_path, spec):
+    """One archived radar mosaic or HRRR hour, with the small file that tells the server what was made."""
+    import radar_archive as RA
+    kind, what, at = spec["kind"], str(spec["what"]), int(spec["at"])
+    try:
+        meta = (RA.mrms_frame if kind == "mrms" else RA.hrrr_frame)(what, at)
+    except (ValueError, LookupError) as e:
+        meta = {"error": str(e)[:300], "type": e.__class__.__name__}
+    root = os.path.join(RA.DATA, "radar-archive")
+    res = os.path.join(root, "results", f"{kind}_{what}_{at}.json")
+    os.makedirs(os.path.dirname(res), exist_ok=True)
+    with open(res, "w") as fh:
+        json.dump(meta, fh)
+    files = []
+    with _radar_lock:
+        for dp, dn, fn in os.walk(root):
+            dn[:] = [d for d in dn if d not in ("results", "l3")]
+            for n in fn:
+                p = os.path.join(dp, n)
+                if n.endswith((".png", ".json", ".webp")) and _radar_sent.get(p) != os.path.getsize(p):
+                    files.append((p, os.path.relpath(p, root).replace(os.sep, "/")))
+        for p, _r in files:
+            _radar_sent[p] = os.path.getsize(p)
+    # The pictures first, the result last: the server answers the moment the result is there.
+    send(base, key_path, files + [(res, "results/" + os.path.basename(res))], region="radar-archive")
+    return len(files)
 
 
 def rel_of(SA, png):
@@ -199,6 +245,10 @@ def run_serve(base, key_path, minutes):
     def work(spec, k):
         t0 = time.time()
         try:
+            if spec.get("kind") in ("mrms", "hrrr"):
+                n = draw_radar(base, key_path, spec)
+                log(f"drew and sent {spec['kind']} {spec['what']}: {n} files in {time.time() - t0:.1f}s")
+                return
             files = draw(SA, spec)
             send(base, key_path, files)
             log(f"drew and sent {spec['sector']} band {spec['band']} in {time.time() - t0:.1f}s")
@@ -223,7 +273,7 @@ def run_serve(base, key_path, minutes):
                                 headers={"User-Agent": "gwcfc-archive-builder"}).json().get("jobs") or []
             for spec in jobs:
                 k = json.dumps(spec, sort_keys=True)
-                if spec.get("kind") == "sat" and k not in busy and len(busy) < 12:
+                if spec.get("kind") in ("sat", "mrms", "hrrr") and k not in busy and len(busy) < 12:
                     busy.add(k)
                     pool.submit(work, spec, k)
         except Exception as e:                          # noqa: BLE001
