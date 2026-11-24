@@ -216,31 +216,48 @@ _radar_lock = __import__("threading").Lock()
 
 
 def draw_radar(base, key_path, spec):
-    """One archived radar mosaic or HRRR hour, with the small file that tells the server what was made."""
+    """One archived radar mosaic or HRRR hour, with the small file that tells the server what was made.
+
+    An HRRR hour paints every field it has, the one asked for first: that one is sent, with its result, the moment it
+    is on disk, and the rest follow when they are painted."""
     import radar_archive as RA
     kind, what, at = spec["kind"], str(spec["what"]), int(spec["at"])
-    try:
-        meta = (RA.mrms_frame if kind == "mrms" else RA.hrrr_frame)(what, at)
-    except (ValueError, LookupError) as e:
-        meta = {"error": str(e)[:300], "type": e.__class__.__name__}
     root = os.path.join(RA.DATA, "radar-archive")
     res = os.path.join(root, "results", f"{kind}_{what}_{at}.json")
-    os.makedirs(os.path.dirname(res), exist_ok=True)
-    with open(res, "w") as fh:
-        json.dump(meta, fh)
-    files = []
-    with _radar_lock:
-        for dp, dn, fn in os.walk(root):
-            dn[:] = [d for d in dn if d not in ("results", "l3")]
-            for n in fn:
-                p = os.path.join(dp, n)
-                if n.endswith((".png", ".json", ".webp")) and _radar_sent.get(p) != os.path.getsize(p):
-                    files.append((p, os.path.relpath(p, root).replace(os.sep, "/")))
-        for p, _r in files:
-            _radar_sent[p] = os.path.getsize(p)
-    # The pictures first, the result last: the server answers the moment the result is there.
-    send(base, key_path, files + [(res, "results/" + os.path.basename(res))], region="radar-archive")
-    return len(files)
+    sent_n = [0]
+
+    def publish(meta):
+        os.makedirs(os.path.dirname(res), exist_ok=True)
+        with open(res, "w") as fh:
+            json.dump(meta, fh)
+        files = []
+        with _radar_lock:
+            for dp, dn, fn in os.walk(root):
+                dn[:] = [d for d in dn if d not in ("results", "l3")]
+                for n in fn:
+                    p = os.path.join(dp, n)
+                    if n.endswith((".png", ".json", ".webp")) and _radar_sent.get(p) != os.path.getsize(p):
+                        files.append((p, os.path.relpath(p, root).replace(os.sep, "/")))
+            for p, _r in files:
+                _radar_sent[p] = os.path.getsize(p)
+        # The pictures first, the result last: the server answers the moment the result is there.
+        send(base, key_path, files + [(res, "results/" + os.path.basename(res))], region="radar-archive")
+        sent_n[0] += len(files)
+
+    early = [False]
+
+    def first(meta):
+        publish(meta)
+        early[0] = True
+
+    try:
+        meta = RA.mrms_frame(what, at) if kind == "mrms" else RA.hrrr_frame(what, at, first=first)
+    except (ValueError, LookupError) as e:
+        meta = {"error": str(e)[:300], "type": e.__class__.__name__}
+    # Once more at the end: the rest of the hour's pictures (or everything, when nothing was sent early).
+    if not early[0] or kind == "hrrr":
+        publish(meta)
+    return sent_n[0]
 
 
 def rel_of(SA, png):
